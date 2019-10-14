@@ -22,7 +22,7 @@ const typeDefs = gql`
     }
 
     type User {
-      about: String!
+      about: String
       created_time: Int!
       created: String!
       id: String!
