@@ -1,4 +1,5 @@
 const { ApolloServer, gql, UserInputError } = require('apollo-server');
+const { print } = require('graphql');
 const fetch = require('node-fetch');
 
 const typeDefs = gql`
@@ -44,11 +45,7 @@ const typeDefs = gql`
     type Query {
       item(id: Int!): Item
       user(id: String!): User
-      news(index: Int!): [FeedItem]
-      newest(index: Int!): [FeedItem]
-      ask(index: Int!): [FeedItem]
-      show(index: Int!): [FeedItem]
-      jobs(index: Int!): [FeedItem]
+      feeds(type: String!, index: Int!): [FeedItem]!
     }
 `;
 
@@ -63,10 +60,18 @@ const resolvers = {
         const { id } = args;
         return fetch(`${baseURL}/user/${id}.json`).then(res => res.json());
       },
-      news: (parent, args) => {
-        const { index } = args;
+      feeds: (parent, args) => {
+        const { index, type } = args;
         const validationErrors = {};
-        if (index > 10 || index < 1) {
+
+        validFeeds = (type, index) => {
+          if (type === "news") return index > 0 && index <= 10;
+          else if (type === "newest") return index > 0 && index <= 12;
+          else if (type === "ask") return index > 0 && index <= 2;
+          else if (type === "show") return index > 0 && index <= 2;
+          else if (type === "jobs") return index > 0 && index <= 1;
+        }
+        if (!validFeeds(type, index)) {
           validationErrors.page = 'This is not a valid page number';
         }
         if (Object.keys(validationErrors).length > 0) {
@@ -75,68 +80,28 @@ const resolvers = {
             { validationErrors }
           );
         }
-        return fetch(`${baseURL}/news/${index}.json`).then(res => res.json());
-      },
-      newest: (parent, args) => {
-        const { index } = args;
-        const validationErrors = {};
-        if (index > 12 || index < 1) {
-          validationErrors.page = 'This is not a valid page number';
-        }
-        if (Object.keys(validationErrors).length > 0) {
-          throw new UserInputError(
-            'Failed to get data due to validation errors',
-            { validationErrors }
-          );
-        }
-        return fetch(`${baseURL}/newest/${index}.json`).then(res => res.json());
-      },
-      ask: (parent, args) => {
-        const { index } = args;
-        const validationErrors = {};
-        if (index > 2 || index < 1) {
-          validationErrors.page = 'This is not a valid page number';
-        }
-        if (Object.keys(validationErrors).length > 0) {
-          throw new UserInputError(
-            'Failed to get data due to validation errors',
-            { validationErrors }
-          );
-        }
-        return fetch(`${baseURL}/ask/${index}.json`).then(res => res.json());
-      },
-      show: (parent, args) => {
-        const { index } = args;
-        const validationErrors = {};
-        if (index > 2 || index < 1) {
-          validationErrors.page = 'This is not a valid page number';
-        }
-        if (Object.keys(validationErrors).length > 0) {
-          throw new UserInputError(
-            'Failed to get data due to validation errors',
-            { validationErrors }
-          );
-        }
-        return fetch(`${baseURL}/show/${index}.json`).then(res => res.json());
-      },
-      jobs: (parent, args) => {
-        const { index } = args;
-        const validationErrors = {};
-        if (index > 1 || index < 1) {
-          validationErrors.page = 'This is not a valid page number';
-        }
-        if (Object.keys(validationErrors).length > 0) {
-          throw new UserInputError(
-            'Failed to get data due to validation errors',
-            { validationErrors }
-          );
-        }
-        return fetch(`${baseURL}/jobs/${index}.json`).then(res => res.json());
+        return fetch(`${baseURL}/${type}/${index}.json`).then(res => res.json());
       },
     }
 }
 
-const server = new ApolloServer({ typeDefs, resolvers });
+class BasicLogging {
+  requestDidStart({queryString, parsedQuery, variables}) {
+    const query = queryString || print(parsedQuery);
+    console.log(query);
+    console.log(variables);
+  }
+
+  willSendResponse({graphqlResponse}) {
+    console.log(JSON.stringify(graphqlResponse, null, 2));
+  }
+}
+
+const server = new ApolloServer({ 
+  typeDefs, 
+  resolvers, 
+  extensions: [() => new BasicLogging()],
+});
 
 server.listen().then(({ url }) => {
     console.log(`Server ready at ${url}`);
